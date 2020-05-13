@@ -8,89 +8,98 @@ import requests
 import youtube_dl
 
 from exceptions import ResponseException
-from secrets import spotify_token, spotify_user_id
 
 
 class CreatePlaylist:
     def __init__(self):
+        self.playlist_name = input("Enter the playlist name : ")
+        self.playlist_description = input("Enter the playlist description : ")
+        self.spotify_user_id = input("Enter your Spotify user id : ")
+        self.spotify_token = input("Enter your Spotify OAuth token : ")
+        self.playlist_id = input("Enter your Youtube playlist id : ")
         self.youtube_client = self.get_youtube_client()
         self.all_song_info = {}
 
     def get_youtube_client(self):
         """ Log Into Youtube, Copied from Youtube Data API """
-        # Disable OAuthlib's HTTPS verification when running locally.
-        # *DO NOT* leave this option enabled in production.
-        os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-
         api_service_name = "youtube"
         api_version = "v3"
-        client_secrets_file = "client_secret.json"
-
-        # Get credentials and create an API client
-        scopes = ["https://www.googleapis.com/auth/youtube.readonly"]
-        flow = google_auth_oauthlib.flow.InstalledAppFlow.from_client_secrets_file(
-            client_secrets_file, scopes)
-        credentials = flow.run_console()
 
         # from the Youtube DATA API
         youtube_client = googleapiclient.discovery.build(
-            api_service_name, api_version, credentials=credentials)
+            api_service_name, api_version, developerKey="AIzaSyB98OglUIerOjnqfU2hpkgAji2OoYyGzx4")
 
         return youtube_client
 
-    def get_liked_videos(self):
-        """Grab Our Liked Videos & Create A Dictionary Of Important Song Information"""
-        request = self.youtube_client.videos().list(
-            part="snippet,contentDetails,statistics",
-            myRating="like"
+    def get_playlist_videos(self):
+        print("[youtube] Getting playlist videos info")
+        """Grab Our Playlist Videos & Create A Dictionary Of Important Song Information"""
+        request = self.youtube_client.playlistItems().list(
+            part="snippet, contentDetails",
+            playlistId=self.playlist_id,
+            maxResults=50
         )
-        response = request.execute()
 
-        # collect each video and get important information
-        for item in response["items"]:
-            video_title = item["snippet"]["title"]
-            youtube_url = "https://www.youtube.com/watch?v={}".format(
-                item["id"])
+        options = {"ignoreerrors":"True", "format":"worst", "quiet":"True"}
 
-            # use youtube_dl to collect the song name & artist name
-            video = youtube_dl.YoutubeDL({}).extract_info(
-                youtube_url, download=False)
-            song_name = video["track"]
-            artist = video["artist"]
+        index = 0
 
-            if song_name is not None and artist is not None:
-                # save all important info and skip any missing song and artist
-                self.all_song_info[video_title] = {
-                    "youtube_url": youtube_url,
-                    "song_name": song_name,
-                    "artist": artist,
+        while request:
+            # while request:
+            response = request.execute()
 
-                    # add the uri, easy to get song to put into playlist
-                    "spotify_uri": self.get_spotify_uri(song_name, artist)
+            # collect each video and get important information
+            for item in response["items"]:
+                index += 1
+                video_title = item["snippet"]["title"]
+                youtube_url = "https://www.youtube.com/watch?v={}".format(
+                    item["snippet"]["resourceId"]["videoId"])
 
-                }
+                # use youtube_dl to collect the song name & artist name
+                video = youtube_dl.YoutubeDL(options).extract_info(
+                    youtube_url, download=False)
+
+                if video is not None:
+                    song_name = video["track"]
+                    artist = video["artist"]
+
+                    if song_name is not None and artist is not None:
+                        spotify_uri = self.get_spotify_uri(song_name, artist)
+                        if spotify_uri is not None:
+                            # save all important info and skip any missing song and artist
+                            self.all_song_info[video_title] = {
+                                "youtube_url": youtube_url,
+                                "song_name": song_name,
+                                "artist": artist,
+
+                                # add the uri, easy to get song to put into playlist
+                                "spotify_uri": spotify_uri
+
+                            }
+                else:
+                    print("[youtube] Cannot extract song info for the video {}".format(youtube_url))
+                print("[youtube] Getting {} from {}".format(index, response["pageInfo"]["totalResults"]))
+            request = self.youtube_client.playlistItems().list_next(request, response)
 
     def create_playlist(self):
-        """Create A New Playlist"""
+        print("[spotify] Creating a Spotify playlist")
         request_body = json.dumps({
-            "name": "Youtube Liked Vids",
-            "description": "All Liked Youtube Videos",
+            "name": self.playlist_name,
+            "description": self.playlist_description,
             "public": True
         })
 
         query = "https://api.spotify.com/v1/users/{}/playlists".format(
-            spotify_user_id)
+            self.spotify_user_id)
         response = requests.post(
             query,
             data=request_body,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": "Bearer {}".format(spotify_token)
+                "Authorization": "Bearer {}".format(self.spotify_token)
             }
         )
         response_json = response.json()
-
-        # playlist id
         return response_json["id"]
 
     def get_spotify_uri(self, song_name, artist):
@@ -103,28 +112,35 @@ class CreatePlaylist:
             query,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": "Bearer {}".format(spotify_token)
+                "Authorization": "Bearer {}".format(self.spotify_token)
             }
         )
         response_json = response.json()
         songs = response_json["tracks"]["items"]
-
-        # only use the first song
-        uri = songs[0]["uri"]
+        
+        uri = None
+        if len(songs) > 0:
+            uri = songs[0]["uri"]
+        else:
+            print("[spotify] Cannot find this song {} - {}".format(song_name, artist))
 
         return uri
 
     def add_song_to_playlist(self):
-        """Add all liked songs into a new Spotify playlist"""
+        
+        """Add all playlist songs into a new Spotify playlist"""
         # populate dictionary with our liked songs
-        self.get_liked_videos()
+        self.get_playlist_videos()
 
         # collect all of uri
         uris = [info["spotify_uri"]
                 for song, info in self.all_song_info.items()]
 
+        
         # create a new playlist
         playlist_id = self.create_playlist()
+
+        print("[spotify] Adding songs to Spotify playlist ...")
 
         # add all songs into new playlist
         request_data = json.dumps(uris)
@@ -137,18 +153,20 @@ class CreatePlaylist:
             data=request_data,
             headers={
                 "Content-Type": "application/json",
-                "Authorization": "Bearer {}".format(spotify_token)
+                "Authorization": "Bearer {}".format(self.spotify_token)
             }
         )
 
         # check for valid response status
-        if response.status_code != 200:
+        if response.status_code != 201:
             raise ResponseException(response.status_code)
 
         response_json = response.json()
-        return response_json
+        print("[spotify] Songs addded")
 
 
 if __name__ == '__main__':
     cp = CreatePlaylist()
+    print("[app] Starting ...")
     cp.add_song_to_playlist()
+    print("[app] Finish")
