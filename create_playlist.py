@@ -42,12 +42,15 @@ class CreatePlaylist:
 
         options = {"ignoreerrors":"True", "format":"worst", "quiet":"True"}
 
+        index = 0
+
         while request:
             # while request:
             response = request.execute()
 
             # collect each video and get important information
             for item in response["items"]:
+                index += 1
                 video_title = item["snippet"]["title"]
                 youtube_url = "https://www.youtube.com/watch?v={}".format(
                     item["snippet"]["resourceId"]["videoId"])
@@ -75,6 +78,7 @@ class CreatePlaylist:
                             }
                 else:
                     print("[youtube] Cannot extract song info for the video {}".format(youtube_url))
+                print("[youtube] Getting {} from {}".format(index, response["pageInfo"]["totalResults"]))
             request = self.youtube_client.playlistItems().list_next(request, response)
 
     def create_playlist(self):
