@@ -1,5 +1,5 @@
 # SpotifyGeneratePlaylist
-A simple script that takes videos from a plylist on Youtube, and generates a Spotify playlist based on that songs.
+A simple script that takes videos from a playlist on Youtube, and generates a Spotify playlist based on that songs.
 
 ## Table of Contents
 * [Technologies](#Technologies)
