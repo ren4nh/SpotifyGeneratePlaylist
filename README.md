@@ -1,5 +1,5 @@
 # SpotifyGeneratePlaylist
-A simple script that takes videos from a playlist on Youtube, and generates a Spotify playlist based on that songs.
+A simple script that takes videos from a public playlist on Youtube, and generates a Spotify playlist based on that songs.
 
 ## Table of Contents
 * [Technologies](#Technologies)
@@ -23,9 +23,7 @@ A simple script that takes videos from a playlist on Youtube, and generates a Sp
     ![alt text](images/spotify_token.png)
 
 4) Run the File  
-`python3 create_playlist.py`   
-    * you'll immediately see `Please visit this URL to authorize this application: <some long url>`
-    * click on it and log into your Google Account to collect the `authorization code`
+`python3 create_playlist.py`
 
 ## Troubleshooting
 * Spotify Oauth token expires very quickly, If you come across a `KeyError` this could
